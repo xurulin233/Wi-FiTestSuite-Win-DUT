@@ -24,6 +24,22 @@
 #define WFA_TG_H
 
 #include <traffic.h> // fix: move the <windows.h> and <traffic.h> after the stdafx.h and mment out <windows.h>
+
+/*
+ * The Universal CRT (Visual Studio 2015 and later) already declares
+ * "struct timespec" in <time.h>.  The old pthreads-win32 header shipped in
+ * external/pthreadlib would define it a second time, which fails with C2011.
+ * Tell pthread.h that the type already exists when building with the UCRT.
+ */
+#if defined(_MSC_VER) && _MSC_VER >= 1900
+#ifndef HAVE_STRUCT_TIMESPEC
+#define HAVE_STRUCT_TIMESPEC
+#endif
+#ifndef _TIMESPEC_DEFINED
+#define _TIMESPEC_DEFINED
+#endif
+#endif
+
 #include <pthread.h>
 
 /* IP Address String length */

@@ -1,0 +1,92 @@
+name: Build Windows DUT agents
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Check Windows SDK
+        shell: pwsh
+        run: |
+          $sdk = "${env:ProgramFiles(x86)}\Windows Kits\10"
+          $traffic = Get-ChildItem "$sdk\Lib" -Recurse -Filter Traffic.lib -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          $ndis = Get-ChildItem "$sdk\Include" -Recurse -Filter NtDDNdis.h -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if (-not $traffic) { throw "Traffic.lib was not found in the Windows SDK." }
+          if (-not $ndis) { throw "NtDDNdis.h was not found in the Windows SDK." }
+
+          Write-Host "Traffic.lib : $($traffic.FullName)"
+          Write-Host "NtDDNdis.h  : $($ndis.FullName)"
+          msbuild -version
+
+      - name: Build win_ca
+        shell: pwsh
+        run: |
+          msbuild .\win_ca\win_ca.sln /m /t:Rebuild `
+            /p:Configuration=Release `
+            /p:Platform=Win32 `
+            /p:PlatformToolset=v143 `
+            /p:WindowsTargetPlatformVersion=10.0 `
+            /p:WholeProgramOptimization=false
+
+      - name: Build win_dut
+        shell: pwsh
+        run: |
+          msbuild .\win_dut\win_dut.sln /m /t:Rebuild `
+            /p:Configuration=Release `
+            /p:Platform=Win32 `
+            /p:PlatformToolset=v143 `
+            /p:WindowsTargetPlatformVersion=10.0 `
+            /p:WholeProgramOptimization=false
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $ca = Get-ChildItem -Recurse -Filter win_ca.exe |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          $dut = Get-ChildItem -Recurse -Filter win_dut.exe |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $ca) { throw "win_ca.exe was not produced by the build." }
+          if (-not $dut) { throw "win_dut.exe was not produced by the build." }
+
+          Copy-Item $ca.FullName dist\win_ca.exe -Force
+          Copy-Item $dut.FullName dist\win_dut.exe -Force
+
+          if (Test-Path .\Tools\myping\Release\myping.exe) {
+            Copy-Item .\Tools\myping\Release\myping.exe dist\ -Force
+          }
+
+          Copy-Item .\Installation\WfaControlAgent.ini dist\ -Force -ErrorAction SilentlyContinue
+          Copy-Item .\Installation\WfaDutAgent.ini dist\ -Force -ErrorAction SilentlyContinue
+          Copy-Item .\Installation\wfa_cli.txt dist\ -Force -ErrorAction SilentlyContinue
+          Copy-Item .\Installation\wts_settings.txt dist\ -Force -ErrorAction SilentlyContinue
+
+          Get-ChildItem dist | Format-Table Name, Length, LastWriteTime
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-dut-binaries
+          path: dist/
+          if-no-files-found: error

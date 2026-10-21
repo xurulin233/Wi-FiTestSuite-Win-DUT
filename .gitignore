@@ -1,0 +1,22 @@
+# Build outputs
+win_ca/Debug/
+win_ca/Release/
+win_dut/Debug/
+win_dut/Release/
+dist/
+
+# Visual Studio user files
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+
+# Local build-tool downloads / portable toolchain
+vs_buildtools.exe
+msvc/
+downloads/
+
+# Logs and temporary files
+*.log
